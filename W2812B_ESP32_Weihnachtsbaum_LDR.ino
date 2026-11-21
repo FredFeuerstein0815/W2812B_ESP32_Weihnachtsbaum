@@ -3,12 +3,12 @@
 #define NUM_LEDS        300
 #define DATA_PIN        16
 #define LDR_PIN         34
-#define LDR_SCHWELLE    1500 // 500 = sehr dunkel, 1500 =Dämmerung, 4095 = sehr hell
+#define LDR_SCHWELLE    1500 // 500 = sehr dunkel, 1500 = Dämmerung, 4095 = sehr hell
 #define LDR_SAMPLES     5
 
 #define NEO_GRB_KHZ800 (NEO_GRB + NEO_KHZ800)
 
-#define DAUER_WEISS    1
+#define DAUER_WEISS    1   // Verzögerung, 1 = sehr schnelles Lauflicht, 100 = langsames Lauflicht
 #define DAUER_VIOLETT  20
 #define DAUER_BLAU     30
 #define DAUER_CYAN     40
@@ -19,7 +19,7 @@
 
 Adafruit_NeoPixel strip(NUM_LEDS, DATA_PIN, NEO_GRB_KHZ800);
 
-int pos_weiss   = 296;
+int pos_weiss   = 296;  // Startposition der LED, an die max. Anzahl der LEDs auf dem Streifen anpassen.
 int pos_violett = 259;
 int pos_blau    = 222;
 int pos_cyan    = 185;
