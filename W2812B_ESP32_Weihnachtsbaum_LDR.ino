@@ -3,7 +3,7 @@
 #define NUM_LEDS         300
 #define DATA_PIN         16
 #define LDR_PIN          34
-#define LDR_SCHWELLE     1000     // ~150 = sehr dunkel, >1000 LED-Birne im Zimmer an, 4095 = Taschenlampe direkt auf Sensor
+#define LDR_SCHWELLE     1000     // <500 = dunkel, >1000 LED-Birne im Zimmer an, 4095 = Taschenlampe direkt auf Sensor
 #define LDR_SAMPLES      5
 #define LDR_INTERVALL_MS 60000    // 60000 ms = Einmal pro Minute Helligkeit prüfen
 #define HELLIGKEIT_LEDS  128      // 1 = fast aus, 255 = maximale Helligkeit
