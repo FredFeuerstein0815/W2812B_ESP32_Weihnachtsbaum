@@ -1,22 +1,23 @@
 #include <Adafruit_NeoPixel.h>
 
-#define NUM_LEDS        300
-#define DATA_PIN        16
-#define LDR_PIN         34
-#define LDR_SCHWELLE    1500   // 500 = sehr dunkel, 1500 = Dämmerung, 4095 = sehr hell
-#define LDR_SAMPLES     5
+#define NUM_LEDS         300
+#define DATA_PIN         16
+#define LDR_PIN          34
+#define LDR_SCHWELLE     1500   // 500 = sehr dunkel, 1500 = Dämmerung, 4095 = sehr hell
+#define LDR_SAMPLES      5
 #define LDR_INTERVALL_MS 60000
+#define HELLIGKEIT_LEDS  128      // 1 = fast aus, 255 = maximale Helligkeit
 
-#define NEO_GRB_KHZ800  (NEO_GRB + NEO_KHZ800)
+#define NEO_GRB_KHZ800   (NEO_GRB + NEO_KHZ800)
 
-#define DAUER_WEISS     1
-#define DAUER_VIOLETT   20
-#define DAUER_BLAU      30
-#define DAUER_CYAN      40
-#define DAUER_GRUEN     50
-#define DAUER_GELB      60
-#define DAUER_ORANGE    70
-#define DAUER_ROT       80
+#define DAUER_WEISS      1      // Verzögerung in ms, 1 = schnellste LED
+#define DAUER_VIOLETT    26
+#define DAUER_BLAU       41
+#define DAUER_CYAN       56
+#define DAUER_GRUEN      71
+#define DAUER_GELB       86
+#define DAUER_ORANGE     101
+#define DAUER_ROT        116
 
 #define ANIM_TICK_MS   1       // Grundtakt des Animations-Tasks
 #define LED_SHOW_MS    10      // maximale Aktualisierungsrate der LEDs
@@ -26,7 +27,7 @@ Adafruit_NeoPixel strip(NUM_LEDS, DATA_PIN, NEO_GRB_KHZ800);
 // Zustand, der zwischen Tasks geteilt wird
 volatile bool g_dunkel = false;
 
-// Mutex schützt den LED-Puffer (strip) vor gleichzeitigem Zugriff
+// Mutex schützt den Puffer vor gleichzeitigem Zugriff
 SemaphoreHandle_t stripMutex;
 
 // Farbdefinition
@@ -125,7 +126,7 @@ void setup() {
   Serial.println(F("Starte"));
   pinMode(LDR_PIN, INPUT);
   strip.begin();
-  strip.setBrightness(255);
+  strip.setBrightness(HELLIGKEIT_LEDS);
   strip.show();
   stripMutex = xSemaphoreCreateMutex();
   xTaskCreatePinnedToCore(sensorTask,    "LDR",       2048, nullptr, 1, nullptr, 0);
