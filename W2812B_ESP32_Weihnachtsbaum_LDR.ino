@@ -5,7 +5,7 @@
 #define LDR_PIN          34
 #define LDR_SCHWELLE     1000     // ~150 = sehr dunkel, ~1000 LED-Birne im Zimmer an, ~1500 = Dämmerung, 4095 = Taschenlampe direkt auf Sensor
 #define LDR_SAMPLES      5
-#define LDR_INTERVALL_MS 60000    // 60000 = 1x pro Minute
+#define LDR_INTERVALL_MS 60000    // 60000 ms = Einmal pro Minute Helligkeit prüfen
 #define HELLIGKEIT_LEDS  128      // 1 = fast aus, 255 = maximale Helligkeit
 
 #define NEO_GRB_KHZ800   (NEO_GRB + NEO_KHZ800)
