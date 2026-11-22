@@ -3,177 +3,135 @@
 #define NUM_LEDS        300
 #define DATA_PIN        16
 #define LDR_PIN         34
-#define LDR_SCHWELLE    1500 // 500 = sehr dunkel, 1500 = Dämmerung, 4095 = sehr hell
+#define LDR_SCHWELLE    1500   // 500 = sehr dunkel, 1500 = Dämmerung, 4095 = sehr hell
 #define LDR_SAMPLES     5
+#define LDR_INTERVALL_MS 60000
 
-#define NEO_GRB_KHZ800 (NEO_GRB + NEO_KHZ800)
+#define NEO_GRB_KHZ800  (NEO_GRB + NEO_KHZ800)
 
-#define DAUER_WEISS    1   // Verzögerung, 1 = sehr schnelles Lauflicht, 100 = langsames Lauflicht
-#define DAUER_VIOLETT  20
-#define DAUER_BLAU     30
-#define DAUER_CYAN     40
-#define DAUER_GRUEN    50
-#define DAUER_GELB     60
-#define DAUER_ORANGE   70
-#define DAUER_ROT      80
+#define DAUER_WEISS     1
+#define DAUER_VIOLETT   20
+#define DAUER_BLAU      30
+#define DAUER_CYAN      40
+#define DAUER_GRUEN     50
+#define DAUER_GELB      60
+#define DAUER_ORANGE    70
+#define DAUER_ROT       80
+
+#define ANIM_TICK_MS   1       // Grundtakt des Animations-Tasks
+#define LED_SHOW_MS    10      // maximale Aktualisierungsrate der LEDs
 
 Adafruit_NeoPixel strip(NUM_LEDS, DATA_PIN, NEO_GRB_KHZ800);
 
-int pos_weiss   = 296;  // Startposition der LED, an die max. Anzahl der LEDs auf dem Streifen anpassen.
-int pos_violett = 259;
-int pos_blau    = 222;
-int pos_cyan    = 185;
-int pos_gruen   = 148;
-int pos_gelb    = 111;
-int pos_orange  = 74;
-int pos_rot     = 37;
+// Zustand, der zwischen Tasks geteilt wird
+volatile bool g_dunkel = false;
 
-unsigned long letzesWeissUpdate   = 0;
-unsigned long letzesViolettUpdate = 0;
-unsigned long letzesBlauUpdate    = 0;
-unsigned long letzesCyanUpdate    = 0;
-unsigned long letzesGruenUpdate   = 0;
-unsigned long letzesGelbUpdate    = 0;
-unsigned long letzesOrangeUpdate  = 0;
-unsigned long letzesRotUpdate     = 0;
+// Mutex schützt den LED-Puffer (strip) vor gleichzeitigem Zugriff
+SemaphoreHandle_t stripMutex;
 
-bool warDunkel = false;
+// Farbdefinition
+struct Farbe {
+  uint8_t r, g, b;
+  uint16_t dauer;
+  int pos;
+  TickType_t letzte;
+};
 
-bool istDunkel() {
-  long summe = 0;
-  for (int i = 0; i < LDR_SAMPLES; i++) {
-    summe += analogRead(LDR_PIN);
-    delayMicroseconds(10000);
+Farbe farben[] = {
+  {255, 255, 255, DAUER_WEISS,   296, 0},
+  {110,   0, 165, DAUER_VIOLETT, 259, 0},
+  {  0,   0, 255, DAUER_BLAU,    222, 0},
+  {  0, 255,  63, DAUER_CYAN,    185, 0},
+  {  0, 255,   0, DAUER_GRUEN,   148, 0},
+  {236, 255,   0, DAUER_GELB,    111, 0},
+  {255, 156,   0, DAUER_ORANGE,   74, 0},
+  {255,   0,   0, DAUER_ROT,      37, 0},
+};
+const int ANZAHL_FARBEN = sizeof(farben) / sizeof(farben[0]);
+
+void sensorTask(void *pvParameters) {
+  (void)pvParameters;
+  for (;;) {
+    long summe = 0;
+    for (int i = 0; i < LDR_SAMPLES; i++) {
+      summe += analogRead(LDR_PIN);
+      vTaskDelay(pdMS_TO_TICKS(2));
+    }
+    bool dunkel = (summe / LDR_SAMPLES) < LDR_SCHWELLE;
+    g_dunkel = dunkel;
+    vTaskDelay(pdMS_TO_TICKS(LDR_INTERVALL_MS));
   }
-  return (summe / LDR_SAMPLES) < LDR_SCHWELLE;
 }
 
-void stripAusschalten() {
-  for (int i = 0; i < NUM_LEDS; i++) {
-    strip.setPixelColor(i, 0, 0, 0);
+void animationTask(void *pvParameters) {
+  (void)pvParameters;
+
+  bool warDunkel = false;
+  TickType_t letzteAusgabe = xTaskGetTickCount();
+  TickType_t letzterTick   = xTaskGetTickCount();
+
+  for (;;) {
+    vTaskDelayUntil(&letzterTick, pdMS_TO_TICKS(ANIM_TICK_MS));
+    TickType_t jetzt = xTaskGetTickCount();
+    bool dunkel = g_dunkel;
+
+    if (!dunkel) {
+      if (warDunkel) {
+        Serial.println(F("Zu hell, LEDs aus"));
+        xSemaphoreTake(stripMutex, portMAX_DELAY);
+        strip.clear();
+        strip.show();
+        xSemaphoreGive(stripMutex);
+      }
+      warDunkel = false;
+      continue;
+    }
+
+    if (!warDunkel) {
+      Serial.println(F("Dunkel genug, LEDs an"));
+      for (int i = 0; i < ANZAHL_FARBEN; i++) {
+        farben[i].letzte = (i == 0) ? jetzt : jetzt - pdMS_TO_TICKS(farben[i].dauer);
+      }
+    }
+    warDunkel = true;
+    bool geaendert = false;
+    xSemaphoreTake(stripMutex, portMAX_DELAY);
+    for (int i = 0; i < ANZAHL_FARBEN; i++) {
+      Farbe &f = farben[i];
+      if ((jetzt - f.letzte) >= pdMS_TO_TICKS(f.dauer)) {
+        f.letzte = jetzt;
+        int alt = f.pos;
+        f.pos = (f.pos + 1) % NUM_LEDS;
+        bool belegt = false;
+        for (int j = 0; j < ANZAHL_FARBEN; j++) {
+          if (farben[j].pos == alt) { belegt = true; break; }
+        }
+        if (!belegt) strip.setPixelColor(alt, 0, 0, 0);
+        strip.setPixelColor(f.pos, f.r, f.g, f.b);
+        geaendert = true;
+      }
+    }
+
+    if (geaendert && (jetzt - letzteAusgabe) >= pdMS_TO_TICKS(LED_SHOW_MS)) {
+      strip.show();
+      letzteAusgabe = jetzt;
+    }
+    xSemaphoreGive(stripMutex);
   }
-  strip.show();
-  letzesWeissUpdate   = millis();
-  letzesViolettUpdate = millis();
-  letzesBlauUpdate    = millis();
-  letzesCyanUpdate    = millis();
-  letzesGruenUpdate   = millis();
-  letzesGelbUpdate    = millis();
-  letzesOrangeUpdate  = millis();
-  letzesRotUpdate     = millis();
 }
 
 void setup() {
   Serial.begin(115200);
-  Serial.println(F("LED-Streifen startet …"));
+  Serial.println(F("Starte"));
   pinMode(LDR_PIN, INPUT);
   strip.begin();
   strip.setBrightness(255);
   strip.show();
+  stripMutex = xSemaphoreCreateMutex();
+  xTaskCreatePinnedToCore(sensorTask,    "LDR",       2048, nullptr, 1, nullptr, 0);
+  xTaskCreatePinnedToCore(animationTask, "Animation", 4096, nullptr, 2, nullptr, 1);
 }
 
 void loop() {
-//  Serial.print("LDR = "); Serial.println(analogRead(LDR_PIN));
-  bool dunkel = istDunkel();
-
-  if (!dunkel) {
-    if (warDunkel) {
-      Serial.println(F("\nZu hell, LEDs aus"));
-      stripAusschalten();
-      Serial.print("LDR = "); Serial.println(analogRead(LDR_PIN));
-    }
-    warDunkel = false;
-    return;
-  }
-
-  if (!warDunkel) {
-    Serial.println(F("\nDunkel genug, LEDs an"));
-    Serial.print("LDR = "); Serial.println(analogRead(LDR_PIN));
-    letzesWeissUpdate   = millis();
-    letzesViolettUpdate = millis() - DAUER_VIOLETT;
-    letzesBlauUpdate    = millis() - DAUER_BLAU;
-    letzesCyanUpdate    = millis() - DAUER_CYAN;
-    letzesGruenUpdate   = millis() - DAUER_GRUEN;
-    letzesGelbUpdate    = millis() - DAUER_GELB;
-    letzesOrangeUpdate  = millis() - DAUER_ORANGE;
-    letzesRotUpdate     = millis() - DAUER_ROT;
-  }
-  warDunkel = true;
-
-  unsigned long now = millis();
-  bool changed = false;
-
-  if (now - letzesWeissUpdate >= DAUER_WEISS) {
-    letzesWeissUpdate = now;
-    int alt = pos_weiss;
-    pos_weiss = (pos_weiss + 1) % NUM_LEDS;
-    if (alt != pos_rot) strip.setPixelColor(alt, 0, 0, 0);
-    strip.setPixelColor(pos_weiss, 255, 255, 255);
-    changed = true;
-  }
-
-  if (now - letzesViolettUpdate >= DAUER_VIOLETT) {
-    letzesViolettUpdate = now;
-    int alt = pos_violett;
-    pos_violett = (pos_violett + 1) % NUM_LEDS;
-    if (alt != pos_violett) strip.setPixelColor(alt, 0, 0, 0);
-    strip.setPixelColor(pos_violett, 110, 0, 165);
-    changed = true;
-  }
-
-  if (now - letzesBlauUpdate >= DAUER_BLAU) {
-    letzesBlauUpdate = now;
-    int alt = pos_blau;
-    pos_blau = (pos_blau + 1) % NUM_LEDS;
-    if (alt != pos_blau) strip.setPixelColor(alt, 0, 0, 0);
-    strip.setPixelColor(pos_blau, 0, 0, 255);
-    changed = true;
-  }
-
-  if (now - letzesCyanUpdate >= DAUER_CYAN) {
-    letzesCyanUpdate = now;
-    int alt = pos_cyan;
-    pos_cyan = (pos_cyan + 1) % NUM_LEDS;
-    if (alt != pos_cyan) strip.setPixelColor(alt, 0, 0, 0);
-    strip.setPixelColor(pos_cyan, 0, 255, 63);
-    changed = true;
-  }
-
-  if (now - letzesGruenUpdate >= DAUER_GRUEN) {
-    letzesGruenUpdate = now;
-    int alt = pos_gruen;
-    pos_gruen = (pos_gruen + 1) % NUM_LEDS;
-    if (alt != pos_gruen) strip.setPixelColor(alt, 0, 0, 0);
-    strip.setPixelColor(pos_gruen, 0, 255, 0);
-    changed = true;
-  }
-
-  if (now - letzesGelbUpdate >= DAUER_GELB) {
-    letzesGelbUpdate = now;
-    int alt = pos_gelb;
-    pos_gelb = (pos_gelb + 1) % NUM_LEDS;
-    if (alt != pos_gelb) strip.setPixelColor(alt, 0, 0, 0);
-    strip.setPixelColor(pos_gelb, 236, 255, 0);
-    changed = true;
-  }
-
-  if (now - letzesOrangeUpdate >= DAUER_ORANGE) {
-    letzesOrangeUpdate = now;
-    int alt = pos_orange;
-    pos_orange = (pos_orange + 1) % NUM_LEDS;
-    if (alt != pos_orange) strip.setPixelColor(alt, 0, 0, 0);
-    strip.setPixelColor(pos_orange, 255, 156, 0);
-    changed = true;
-  }
-
-  if (now - letzesRotUpdate >= DAUER_ROT) {
-    letzesRotUpdate = now;
-    int alt = pos_rot;
-    pos_rot = (pos_rot + 1) % NUM_LEDS;
-    if (alt != pos_rot) strip.setPixelColor(alt, 0, 0, 0);
-    strip.setPixelColor(pos_rot, 255, 0, 0);
-    changed = true;
-  }
-
-  if (changed) strip.show();
+  vTaskDelay(portMAX_DELAY);
 }
