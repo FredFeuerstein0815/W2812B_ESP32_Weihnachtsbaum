@@ -3,7 +3,7 @@
 #define NUM_LEDS         300
 #define DATA_PIN         16
 #define LDR_PIN          34
-#define LDR_SCHWELLE     1500     // 500 = sehr dunkel, 1500 = Dämmerung, 4095 = sehr hell
+#define LDR_SCHWELLE     1000     // 500 = sehr dunkel, 1500 = Dämmerung, 4095 = sehr hell
 #define LDR_SAMPLES      5
 #define LDR_INTERVALL_MS 60000    // 60000 = 1x pro Minute
 #define HELLIGKEIT_LEDS  128      // 1 = fast aus, 255 = maximale Helligkeit
@@ -60,6 +60,8 @@ void sensorTask(void *pvParameters) {
     }
     bool dunkel = (summe / LDR_SAMPLES) < LDR_SCHWELLE;
     g_dunkel = dunkel;
+    Serial.print(F("LDR Mittelwert: "));
+    Serial.println(summe / LDR_SAMPLES);
     vTaskDelay(pdMS_TO_TICKS(LDR_INTERVALL_MS));
   }
 }
