@@ -3,14 +3,14 @@
 #define NUM_LEDS         300
 #define DATA_PIN         16
 #define LDR_PIN          34
-#define LDR_SCHWELLE     1500   // 500 = sehr dunkel, 1500 = Dämmerung, 4095 = sehr hell
+#define LDR_SCHWELLE     1500     // 500 = sehr dunkel, 1500 = Dämmerung, 4095 = sehr hell
 #define LDR_SAMPLES      5
-#define LDR_INTERVALL_MS 60000
+#define LDR_INTERVALL_MS 60000    // 60000 = 1x pro Minute
 #define HELLIGKEIT_LEDS  128      // 1 = fast aus, 255 = maximale Helligkeit
 
 #define NEO_GRB_KHZ800   (NEO_GRB + NEO_KHZ800)
 
-#define DAUER_WEISS      1      // Verzögerung in ms, 1 = schnellste LED
+#define DAUER_WEISS      1        // Verzögerung in ms, 1 = schnellste LED
 #define DAUER_VIOLETT    26
 #define DAUER_BLAU       41
 #define DAUER_CYAN       56
@@ -19,8 +19,8 @@
 #define DAUER_ORANGE     101
 #define DAUER_ROT        116
 
-#define ANIM_TICK_MS   1       // Grundtakt des Animations-Tasks
-#define LED_SHOW_MS    10      // maximale Aktualisierungsrate der LEDs
+#define ANIM_TICK_MS   1          // Grundtakt des Animations-Tasks
+#define LED_SHOW_MS    10         // maximale Aktualisierungsrate der LEDs
 
 Adafruit_NeoPixel strip(NUM_LEDS, DATA_PIN, NEO_GRB_KHZ800);
 
